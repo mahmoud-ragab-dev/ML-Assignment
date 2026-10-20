@@ -1,19 +1,127 @@
 import pandas as pd 
-
+from sklearn.model_selection import train_test_split
 House_Prices=pd.read_csv(r"C:/Users/dell/Downloads/House_Prices.csv")
-print(House_Prices.isnull().sum())
-print(House_Prices.columns)
-print(House_Prices.mean(numeric_only=True))
-House_Prices.fillna(House_Prices.mean(numeric_only=True), inplace=True)
-print(House_Prices)
-print(House_Prices.isnull().sum())
-print(House_Prices.duplicated().sum())
-House_Prices=House_Prices.drop_duplicates()
+# check dublicate without address
+duplicates_colums=  [
+    col for col in House_Prices.columns if col != "ADDRESS"
+    
+    ]
+print("the dublicate ignore the  ADDRESS:"
+      ,House_Prices.duplicated(subset=duplicates_colums).sum()
+      )
+# Remove duplicates
+House_Prices=House_Prices.drop_duplicates(subset=duplicates_colums).copy()
 
-House_Prices = pd.get_dummies(
-    House_Prices,
-    columns=["SUBURB","NEAREST_STN"],
-    dtype=int
-)
+#convert Datasold to data time and extract year,month
+House_Prices["DATE_SOLD"]=pd.to_datetime(House_Prices["DATE_SOLD"], 
+ format="%Y-%m-%d",errors="coerce")
+House_Prices["sale year"]=House_Prices["DATE_SOLD"].dt.year
+House_Prices["sale month"]=House_Prices["DATE_SOLD"].dt.month
+House_Prices=House_Prices.drop(columns=["DATE_SOLD"])
+# Remove ADDRESS 
+House_Prices=House_Prices.drop(columns=["ADDRESS"])
+# row without the target connt be ,used super learing value 
+House_Prices=House_Prices.dropna(
+    subset=["PRICE"]
+    ).copy()
+# Separate features and target.
+x=House_Prices.drop(columns=["PRICE"])
+y=House_Prices["PRICE"]
+#split the data 
 
-print(House_Prices.head())
+x_train,x_test,y_train,y_test= train_test_split(
+ x,y,test_size=0.2,random_state=42  
+    )
+# Identify categorical columns for frequency encoding,Identify numeric columns.
+
+categorical_columns=["SUBURB","NEAREST_STN","NEAREST_SCH_RANK"]
+
+numeric_columns=x_train.select_dtypes(
+    include="number"
+    ).columns.tolist()
+#imputation values,medain
+median_columns= [col for col in ["GARAGE", "BUILD_YEAR", "NEAREST_SCH_RANK"]
+if col in numeric_columns
+]
+
+mean_columns=[col for col in numeric_columns if col not in median_columns]
+imputation_values = {}
+
+for col in median_columns:
+    imputation_values[col] = x_train[col].median()
+
+for col in mean_columns:
+    imputation_values[col] = x_train[col].mean()
+
+    
+# Apply training-derived values to both sets.
+x_train=x_train.fillna(imputation_values)
+x_test=x_test.fillna(imputation_values)
+
+#process the missing value in the numeric columns
+
+frequencies_mapping={}
+
+for col in categorical_columns:
+    if col not in x_train.columns:
+        continue
+
+    # Fill missing categories using the training mode
+    mode_values = x_train[col].mode(dropna=True)
+
+    if not mode_values.empty:
+        fill_values = mode_values.iloc[0]
+        x_train[col] = x_train[col].fillna(fill_values)
+        x_test[col] = x_test[col].fillna(fill_values)
+
+    # Frequency encoding
+    frequencies = x_train[col].value_counts(normalize=True)
+    frequencies_mapping = frequencies.to_dict()
+
+    x_train[col] = x_train[col].map(frequencies_mapping).fillna(0)
+    x_test[col] = x_test[col].map(frequencies_mapping).fillna(0)
+
+
+print("Training missing values:")
+print(x_train.isnull().sum().sum())
+
+print("Testing missing values:")
+print(x_test.isnull().sum().sum())
+
+print("Training shape:", x_train.shape)
+print("Testing shape:", x_test.shape)
+
+print("\nFirst five training rows:")
+print(x_train.head())
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
